@@ -1,0 +1,6 @@
+/clipterm
+/dist/
+/build/
+*.test
+*.out
+.DS_Store

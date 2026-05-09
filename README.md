@@ -1,5 +1,7 @@
 # clipterm
 
+Copy screenshot. Paste path anywhere.
+
 ## Overview
 
 clipterm is a cross-platform tool that brings modern clipboard object semantics to terminals, CLIs, AI agents, and text-focused workflows.
