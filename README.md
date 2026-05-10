@@ -84,6 +84,30 @@ clipterm daemon
 
 `clipterm daemon` starts a background process and returns immediately. Then copy a screenshot, a file in Finder, or normal text and press `Cmd+Shift+V` in any focused text input.
 
+For day-to-day use during the prototype stage, start the daemon from your shell startup file. `clipterm daemon` is idempotent: if the daemon is already running, it returns without starting another copy.
+
+For zsh:
+
+```bash
+printf '\n# Start clipterm background daemon\ncommand -v clipterm >/dev/null 2>&1 && clipterm daemon >/dev/null 2>&1 || true\n' >> ~/.zshrc
+```
+
+For bash:
+
+```bash
+printf '\n# Start clipterm background daemon\ncommand -v clipterm >/dev/null 2>&1 && clipterm daemon >/dev/null 2>&1 || true\n' >> ~/.bash_profile
+```
+
+If `clipterm` is not on your `PATH`, use the installed absolute path instead:
+
+```bash
+$HOME/.local/bin/clipterm daemon >/dev/null 2>&1 || true
+```
+
+This starts clipterm when a new shell opens. A future macOS installer may use a LaunchAgent for login startup, but the prototype intentionally keeps startup explicit and easy to remove.
+
+If the daemon process is killed manually, the next `clipterm daemon` run will detect the stale PID file and start a fresh background process.
+
 Check or stop the background daemon:
 
 ```bash

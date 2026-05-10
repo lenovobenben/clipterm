@@ -282,6 +282,29 @@ Behavior:
 5. If it does, save the image as a cached PNG, then copy and paste the generated absolute path.
 6. If neither applies, send one native `Cmd+V` without modifying the clipboard.
 
+### Daemon Startup Recommendation
+
+For the current prototype, users should start the daemon from a shell startup file, such as `~/.zshrc` or `~/.bash_profile`.
+
+```bash
+command -v clipterm >/dev/null 2>&1 && clipterm daemon >/dev/null 2>&1 || true
+```
+
+If `clipterm` is not on `PATH`, use the installed absolute path:
+
+```bash
+$HOME/.local/bin/clipterm daemon >/dev/null 2>&1 || true
+```
+
+This is a good prototype-stage default:
+
+- `clipterm daemon` is idempotent; if it is already running, it does not start another background process.
+- If the daemon is killed manually, the next `clipterm daemon` run detects the stale PID file and starts a fresh background process.
+- Opening a new terminal automatically attempts startup, and the command returns immediately without occupying the terminal window.
+- It avoids launchd code and installer complexity, and users can remove it by deleting one shell config line.
+
+The more formal macOS approach is a LaunchAgent that starts at login. The current stage should not implement that yet. It can be added later as an optional installer or release-package feature after the project stabilizes.
+
 ### `clipterm rules`
 
 Show the current paste strategy.

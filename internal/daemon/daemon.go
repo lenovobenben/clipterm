@@ -114,7 +114,7 @@ func CurrentStatus() (Status, error) {
 		return Status{}, nil
 	}
 
-	if processAlive(pid) {
+	if processAlive(pid) && processLooksLikeDaemon(pid) {
 		return Status{Running: true, PID: pid}, nil
 	}
 
@@ -183,4 +183,31 @@ func processAlive(pid int) bool {
 	}
 	err = process.Signal(syscall.Signal(0))
 	return err == nil || errors.Is(err, syscall.EPERM)
+}
+
+func processLooksLikeDaemon(pid int) bool {
+	output, err := exec.Command("ps", "-p", strconv.Itoa(pid), "-o", "command=").Output()
+	if err != nil {
+		return false
+	}
+	return commandLooksLikeDaemon(string(output))
+}
+
+func commandLooksLikeDaemon(command string) bool {
+	fields := strings.Fields(command)
+	if len(fields) < 3 {
+		return false
+	}
+
+	executable := filepath.Base(fields[0])
+	if executable != "clipterm" {
+		return false
+	}
+
+	for i := 1; i < len(fields); i++ {
+		if fields[i] == "daemon" && i+1 < len(fields) && fields[i+1] == "--foreground" {
+			return true
+		}
+	}
+	return false
 }

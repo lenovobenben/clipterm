@@ -288,6 +288,29 @@ clipterm doctor
 5. 如果是图片流，将图片保存为缓存 PNG，复制并粘贴生成的绝对路径。
 6. 如果都不是，直接发送一次原生 `Cmd+V`，不修改剪贴板。
 
+### daemon 启动建议
+
+当前原型建议用户把 daemon 启动命令放进 shell startup 文件，例如 `~/.zshrc` 或 `~/.bash_profile`。
+
+```bash
+command -v clipterm >/dev/null 2>&1 && clipterm daemon >/dev/null 2>&1 || true
+```
+
+如果 `clipterm` 没有加入 `PATH`，可以使用安装路径：
+
+```bash
+$HOME/.local/bin/clipterm daemon >/dev/null 2>&1 || true
+```
+
+这个方案适合早期原型：
+
+- `clipterm daemon` 是幂等的；如果已经运行，不会重复启动多个后台进程。
+- 如果 daemon 被人为 kill，下一次执行 `clipterm daemon` 会识别 stale PID 文件并重新启动。
+- 打开新终端时会自动尝试启动，命令会立即返回，不占用终端窗口。
+- 不引入 launchd 代码和安装复杂度，用户可以直接从 shell 配置中删除。
+
+macOS 的更正式方案是 LaunchAgent 登录自启动，但当前阶段暂不实现。等项目更稳定、有安装器或发布包后，再考虑提供可选 LaunchAgent。
+
 ### `clipterm rules`
 
 显示当前粘贴策略。
