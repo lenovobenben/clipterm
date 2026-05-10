@@ -16,6 +16,11 @@ type PasteOptions struct {
 	SendPaste bool
 }
 
+type SmartPasteResult struct {
+	Path        string
+	NativePaste bool
+}
+
 type DaemonOptions struct {
 	DebugHotkeys bool
 }
@@ -90,6 +95,25 @@ func (s *Service) Paste(ctx context.Context, options PasteOptions) (string, erro
 	}
 
 	return path, nil
+}
+
+func (s *Service) SmartPaste(ctx context.Context) (SmartPasteResult, error) {
+	path, err := s.Paste(ctx, PasteOptions{
+		CopyPath:  true,
+		SendPaste: true,
+	})
+	if err == nil {
+		return SmartPasteResult{Path: path}, nil
+	}
+	if !errors.Is(err, clipboard.ErrNoImage) {
+		return SmartPasteResult{}, err
+	}
+
+	if err := s.paste.SendPaste(ctx); err != nil {
+		return SmartPasteResult{}, err
+	}
+
+	return SmartPasteResult{NativePaste: true}, nil
 }
 
 func (s *Service) outputPath(ctx context.Context, path string, options PasteOptions) error {

@@ -6,7 +6,7 @@ Copy screenshot. Paste path anywhere.
 
 clipterm is a cross-platform tool that brings modern clipboard object semantics to terminals, CLIs, AI agents, and text-focused workflows.
 
-It allows users to copy clipboard images or files and paste usable file paths into the current environment using normal paste operations (`Ctrl+V` / `Cmd+V`).
+The current macOS prototype uses `Cmd+Shift+V` as a CLI/agent-friendly smart paste shortcut: clipboard images and single copied files become absolute paths, while normal text falls back to native paste. Fully replacing normal `Cmd+V` / `Ctrl+V` is only a possible future direction, not a committed first-stage goal.
 
 Instead of treating paste as raw text only, clipterm materializes clipboard objects as real files inside the target environment and pastes the resulting absolute file path when that is more useful than native paste.
 
@@ -24,17 +24,26 @@ clipterm paste --copy-path
 clipterm paste --copy-path --send-paste
 clipterm daemon
 clipterm doctor --request-permissions
+clipterm rules
 clipterm version
 ```
 
-On macOS, `clipterm daemon` listens for `Cmd+Shift+V`. When the clipboard contains an image, it saves the image to the user cache directory, copies the generated path, and sends a normal paste event to the focused app.
+On macOS, `clipterm daemon` listens for `Cmd+Shift+V`. When the clipboard contains an image, it saves the image to the user cache directory, copies the generated path, and sends a normal paste event to the focused app. When the clipboard contains a single copied file, it pastes the original absolute file path. For normal text and other ordinary clipboard content, it sends native `Cmd+V` without modifying the clipboard.
 
-Current clipboard behavior:
+## macOS Paste Behavior
 
-- `Cmd+Shift+V` is a "convert to path and paste" action.
-- After conversion, the system clipboard contains the generated path text.
-- You can press normal `Cmd+V` repeatedly to paste that same path until you copy something else.
-- The prototype does not yet restore the original image or file clipboard object after path paste.
+macOS copy and paste is object-based, not just text-based. When Finder copies a file, the system pasteboard can contain several representations of the same object, such as a file URL, a display name, and preview metadata. Each target app decides which representation to consume. This is why pasting the same copied file into a browser address bar may produce a file name, while pasting into iTerm2 may produce an absolute path.
+
+clipterm's current `Cmd+Shift+V` behavior is CLI/agent smart paste: convert clipboard objects into local absolute paths when that is useful, and otherwise fall back to native paste.
+
+| Clipboard content | Native macOS `Cmd+V` | clipterm `Cmd+Shift+V` |
+| --- | --- | --- |
+| Screenshot or image stream | Depends on the target app. Image-aware apps may accept the image; plain text fields may do nothing or use another representation. | Save the image as a PNG under the clipterm cache directory, copy the absolute path, then paste the path. |
+| Single copied file in Finder | Depends on the target app. Some apps paste a file name, some paste a file path, and some consume the file object directly. | Paste the original absolute file path. The file is not copied. |
+| Multiple copied files | Depends on the target app. | Not supported yet. clipterm refuses it and does not modify the clipboard. |
+| Plain text and ordinary clipboard content | Paste the content normally. | Send native `Cmd+V` without modifying the clipboard. This preserves normal text and rich paste behavior. |
+
+After a successful image or file path paste, the system clipboard contains the path text. You can press normal `Cmd+V` repeatedly to paste that same path until you copy something else. The prototype does not yet restore the original image or file clipboard object after path paste. Text fallback does not modify the clipboard.
 
 Required macOS permissions:
 
@@ -73,13 +82,19 @@ clipterm doctor --request-permissions
 clipterm daemon
 ```
 
-`clipterm daemon` starts a background process and returns immediately. Then copy a screenshot or a file in Finder and press `Cmd+Shift+V` in any focused text input.
+`clipterm daemon` starts a background process and returns immediately. Then copy a screenshot, a file in Finder, or normal text and press `Cmd+Shift+V` in any focused text input.
 
 Check or stop the background daemon:
 
 ```bash
 clipterm daemon --status
 clipterm daemon --stop
+```
+
+Show the current paste strategy:
+
+```bash
+clipterm rules
 ```
 
 Clean generated screenshot files:
@@ -154,7 +169,7 @@ Examples:
 
 ## Main Goals
 
-- Make `Ctrl+V` / `Cmd+V` work naturally for clipboard objects in terminals, CLIs, AI agents, and text-focused workflows
+- Make paste work naturally for clipboard objects in terminals, CLIs, AI agents, and text-focused workflows
 - Support screenshots and copied files
 - Support local shells, WSL, SSH, tmux, and AI coding CLIs
 - Work even in restricted environments where scp/rz/sz/tunnels fail
@@ -224,9 +239,9 @@ This allows operation in environments where traditional binary transfer methods 
 
 # Roadmap
 
-## Phase 1: Local Image Paste
+## Phase 1: Local CLI/Agent Smart Paste
 
-Copy a screenshot or clipboard image, press `Ctrl+V` / `Cmd+V`, and either preserve native image paste where it works or paste the absolute path of a saved local image file where text paths are more useful.
+Copy a screenshot, clipboard image, single file, or text, then press `Cmd+Shift+V` on macOS. Images and files paste as local absolute paths; text falls back to native paste without changing the clipboard. Future versions may explore normal `Ctrl+V` / `Cmd+V` interception after the risk is better understood.
 
 ## Phase 2: Remote Image Paste
 

@@ -35,8 +35,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	case "doctor":
 		return runDoctor(ctx, commandArgs, stdout, stderr)
 	case "rules":
-		fmt.Fprintln(stderr, "clipterm rules is not implemented yet")
-		return 1
+		return runRules(commandArgs, stdout, stderr)
 	case "version":
 		fmt.Fprintln(stdout, version.Version)
 		return 0
@@ -48,6 +47,25 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		printUsage(stderr)
 		return 2
 	}
+}
+
+func runRules(args []string, stdout, stderr io.Writer) int {
+	flags := flag.NewFlagSet("rules", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+
+	if err := flags.Parse(args); err != nil {
+		return 2
+	}
+
+	fmt.Fprintln(stdout, "mode: cli-agent-smart-paste")
+	fmt.Fprintln(stdout, "hotkey: Cmd+Shift+V")
+	fmt.Fprintln(stdout, "app_rules: disabled")
+	fmt.Fprintln(stdout, "native_image_paste: not intercepted")
+	fmt.Fprintln(stdout, "path_paste: image clipboard -> cache file -> path text")
+	fmt.Fprintln(stdout, "path_paste_files: single copied file -> original absolute path")
+	fmt.Fprintln(stdout, "text_paste: native Cmd+V fallback without modifying clipboard")
+	fmt.Fprintln(stdout, "notes: Cmd+V is not intercepted in the current prototype")
+	return 0
 }
 
 func runClean(ctx context.Context, args []string, stdout, stderr io.Writer) int {
@@ -164,18 +182,14 @@ func runDaemon(ctx context.Context, args []string, stdout, stderr io.Writer) int
 	err := service.RunDaemon(ctx, clipterm.DaemonOptions{
 		DebugHotkeys: *debugHotkeys,
 	}, func(ctx context.Context) {
-		path, err := service.Paste(ctx, clipterm.PasteOptions{
-			CopyPath:  true,
-			SendPaste: true,
-		})
+		result, err := service.SmartPaste(ctx)
 		if err != nil {
-			if errors.Is(err, clipboard.ErrNoImage) {
-				return
-			}
 			printCommandError(stderr, err)
 			return
 		}
-		fmt.Fprintln(stdout, path)
+		if result.Path != "" {
+			fmt.Fprintln(stdout, result.Path)
+		}
 	})
 	if err != nil && !errors.Is(err, context.Canceled) {
 		printCommandError(stderr, err)

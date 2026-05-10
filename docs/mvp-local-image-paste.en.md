@@ -1,13 +1,15 @@
-# MVP: Local Image Smart Paste
+# MVP: Local CLI/Agent Smart Paste
 
 ## Purpose
 
-The first clipterm milestone is to make clipboard images flow naturally into local apps, terminals, CLIs, and AI agent workflows.
+The first clipterm milestone is to make clipboard images, single copied files, and normal text flow naturally into local terminals, CLIs, and AI agent workflows.
 
-After copying a screenshot or another clipboard image, users still press the familiar `Cmd+V` / `Ctrl+V`. clipterm decides what the current paste target should receive:
+A possible future direction is that after copying a screenshot or another clipboard image, users still press the familiar `Cmd+V` / `Ctrl+V`, and clipterm decides what the current paste target should receive:
 
 - If the target app can natively accept image paste, such as ChatGPT web, chat apps, or document editors, clipterm should preserve the native image paste experience.
 - If the target app cannot use image data effectively, such as terminals, browser address bars, Notepad, or plain text fields, clipterm saves the image as a local file and pastes the absolute file path.
+
+The current macOS prototype starts with a safer shortcut: `Cmd+Shift+V` means CLI/agent smart paste. Images and single copied files become absolute paths; normal text and ordinary clipboard content fall back to native `Cmd+V`. Normal `Cmd+V` is not intercepted yet, which avoids breaking native system paste behavior. Fully replacing normal paste is only a future exploration direction, not a first-stage commitment.
 
 The first milestone should feel invisible: users should not need to save screenshots manually, open a file browser, find the file, and copy its path just to use an image in a terminal, CLI, or AI agent.
 
@@ -41,7 +43,9 @@ Materialize clipboard objects for terminals, CLIs, and AI agents.
 
 clipterm is a system-level smart paste tool.
 
-When the user triggers paste and the clipboard contains an image, clipterm uses the current application rules to choose one of two behaviors:
+When the user triggers clipterm smart paste and the clipboard contains an image or a single copied file, clipterm generates or reads a local absolute path and pastes that path into the focused input. If the clipboard contains normal text or ordinary content, clipterm does not rewrite the clipboard and sends one native `Cmd+V`.
+
+If normal `Cmd+V` interception is later proven safe enough, clipterm can use application rules to choose one of two behaviors:
 
 1. Allow native image paste.
 2. Save the image to a local cache directory, then paste the absolute path as text into the current focused input.
@@ -60,18 +64,20 @@ C:\Users\Alice\AppData\Local\clipterm\cache\clipterm-20260509-153012-a83f.png
 
 ## First-Stage Scope
 
-The first stage implements local image smart paste only.
+The first stage implements local CLI/agent smart paste.
 
 Included:
 
 - Read image data from the system clipboard.
+- Read the path of a single file copied in Finder.
 - Save clipboard images as real local files.
-- Paste local absolute paths into path-paste targets.
-- Preserve native image paste where appropriate.
-- Preserve normal text paste behavior when the clipboard does not contain an image.
+- Use `Cmd+Shift+V` to paste local absolute paths into the focused input.
+- Fall back to native `Cmd+V` for normal text and ordinary clipboard content without rewriting the clipboard.
 
 Excluded:
 
+- Normal `Cmd+V` interception.
+- App-specific native image paste allow rules.
 - SSH or remote materialization.
 - WSL path bridging.
 - tmux-aware transport.
@@ -96,7 +102,7 @@ User copies screenshot image
         |
 User focuses a terminal, Notepad, browser address bar, or another text input
         |
-User presses Cmd+V / Ctrl+V
+User presses Cmd+Shift+V
         |
 clipterm detects image clipboard content
         |
@@ -123,6 +129,24 @@ AI CLI example:
 Please inspect this screenshot: /Users/alice/Library/Caches/clipterm/clipterm-20260509-153012-a83f.png
 ```
 
+### Text Fallback Flow
+
+```text
+User copies normal text
+        |
+User focuses a terminal, AI CLI, or another text input
+        |
+User presses Cmd+Shift+V
+        |
+clipterm does not find an image or single file that should become a path
+        |
+clipterm does not modify the clipboard
+        |
+clipterm sends one native Cmd+V
+        |
+The current app receives the system-native paste content
+```
+
 ### Native Image Paste Flow
 
 ```text
@@ -143,22 +167,26 @@ For example, if ChatGPT web can accept an image, clipterm should preserve that u
 
 ## Smart Paste Strategy
 
-clipterm uses the advanced strategy: intercept normal `Cmd+V` / `Ctrl+V`, with the goal of making the behavior invisible to users.
+The current prototype uses a low-risk strategy: do not intercept normal `Cmd+V` / `Ctrl+V`; provide `Cmd+Shift+V` as CLI/agent smart paste.
 
-However, a system-level program cannot always know whether a specific input field accepts images. In the same browser, a ChatGPT message box may accept images while the address bar only accepts text. The first version needs app rules and conservative fallback behavior.
+Future versions may explore more advanced normal `Cmd+V` / `Ctrl+V` interception, but that depends on stability and negative-impact assessment.
+
+A system-level program cannot always know whether a specific input field accepts images. In the same browser, a ChatGPT message box may accept images while the address bar only accepts text. Therefore, if future versions explore normal `Cmd+V` smart interception, they will need app rules and conservative fallback behavior. The current first stage does not do that yet.
 
 ### Rule Types
 
 - `native`: allow native paste. Suitable for ChatGPT web, WeChat, Slack, document editors, and other image-aware targets.
-- `path`: convert the image into a path paste. Suitable for terminals, AI CLIs, Notepad, browser address bars, and plain text fields.
+- `path`: convert images, screenshots, and single copied files into path paste.
+- `native-text`: keep normal text and ordinary clipboard content native by sending paste without rewriting the clipboard.
 - `auto`: default strategy. Decide based on app identity, window title, focused context, and future detection capabilities.
 
 ### Conservative Principles
 
 - Convert to path for known path-paste targets.
 - Allow native paste for known native image targets.
+- Preserve native paste for normal text without reading or rewriting the text content.
 - If the target is unknown or risky, prefer not breaking native paste.
-- Later versions can provide a force-path-paste fallback shortcut, such as `Cmd+Shift+V` / `Ctrl+Shift+V`.
+- The current prototype already provides `Cmd+Shift+V` as CLI/agent smart paste. If future versions intercept normal `Cmd+V`, this shortcut can remain the stable fallback.
 
 ## Initial Platform Scope
 
@@ -166,8 +194,8 @@ However, a system-level program cannot always know whether a specific input fiel
 
 First-class target for MVP.
 
-- Normal paste shortcut: `Cmd+V`
-- Optional force path paste shortcut: `Cmd+Shift+V`
+- Normal paste shortcut: `Cmd+V`, not intercepted by the current prototype.
+- CLI/agent smart paste shortcut: `Cmd+Shift+V`
 - Cache directory: `~/Library/Caches/clipterm/`
 - Important permissions: Accessibility, clipboard read/write, synthetic keyboard events.
 
@@ -194,7 +222,7 @@ Important native-paste targets:
 Second first-class target after the macOS proof of concept.
 
 - Normal paste shortcut: `Ctrl+V`
-- Optional force path paste shortcut: `Ctrl+Shift+V`
+- Candidate CLI/agent smart paste shortcut: `Ctrl+Shift+V`
 - Cache directory: `%LOCALAPPDATA%\clipterm\cache\`
 - Important permissions: clipboard read/write, keyboard hook, foreground window detection, synthetic keyboard events.
 
@@ -243,21 +271,22 @@ This is an important intermediate step before system-level smart paste.
 
 ### `clipterm daemon`
 
-Background process that provides the final MVP user experience.
+Background process that provides the current macOS prototype interaction.
 
 Behavior:
 
-1. Listen for the platform normal paste shortcut.
-2. Check whether the clipboard contains an image.
-3. Identify the foreground application and available context.
-4. Use rules to allow native paste or perform path paste.
-5. Preserve normal paste behavior for non-image clipboards.
+1. Listen for `Cmd+Shift+V`.
+2. First check whether the clipboard contains a single copied file.
+3. If it does, copy and paste the original absolute file path.
+4. Otherwise check whether the clipboard contains an image stream.
+5. If it does, save the image as a cached PNG, then copy and paste the generated absolute path.
+6. If neither applies, send one native `Cmd+V` without modifying the clipboard.
 
 ### `clipterm rules`
 
-Manage application-level paste rules.
+Show the current paste strategy.
 
-The first version can ship with built-in rules. Later versions can expose a config file or CLI management.
+The current prototype does not manage application-level rules yet. If future versions explore normal `Cmd+V` smart interception, built-in rules, config files, or CLI management can be revisited.
 
 ### `clipterm clean`
 
@@ -281,7 +310,7 @@ Useful checks:
 - macOS Accessibility permission.
 - Foreground app detection.
 - Synthetic paste event.
-- Current app rule match result.
+- Current paste strategy.
 
 ## Cache Strategy
 
@@ -307,6 +336,27 @@ clipterm-20260509-153012-a83f.png
 ```
 
 The MVP should save clipboard images as PNG. Other formats can be added later if preserving the original source format becomes important.
+
+## Native macOS Paste vs clipterm Paste
+
+macOS copy and paste is not just a fixed text string. It places a clipboard object on the system pasteboard. A Finder file object can expose several representations at the same time, such as a file URL, display name, icon, preview, and type metadata. The target app chooses which representation it can consume.
+
+This is why the same Finder file copied with `Cmd+C` can behave differently:
+
+- Pasting into a browser address bar may produce the file name.
+- Pasting into iTerm2 may produce the absolute path.
+- Pasting into an app that supports file objects may import or upload the file directly.
+
+The current clipterm prototype does not intercept normal `Cmd+V`. The current `Cmd+Shift+V` is CLI/agent smart paste: convert path-capable clipboard objects into local absolute paths, and preserve native paste for normal text or ordinary content.
+
+| Clipboard content | Native macOS `Cmd+V` | clipterm `Cmd+Shift+V` |
+| --- | --- | --- |
+| Screenshot or image stream | Decided by the target app. Image-aware apps may accept the image; plain text fields may do nothing or read another representation. | Save the image as a PNG under the clipterm cache directory, copy the generated absolute path, and paste that path. |
+| Single file copied in Finder | Decided by the target app. It may paste a file name, paste an absolute path, or consume the file object directly. | Paste the original absolute file path. The file content is not copied. |
+| Multiple files copied in Finder | Decided by the target app. | Not supported yet. clipterm refuses it and does not modify the clipboard. |
+| Plain text and ordinary clipboard content | Paste the content normally. | Send one native `Cmd+V` without modifying the clipboard, preserving system-native text and rich paste behavior. |
+
+After a successful image or file path paste, the system clipboard contains path text. Users can press normal `Cmd+V` repeatedly to paste the same path until they copy something else. Text fallback does not modify the clipboard.
 
 ## Clipboard Restoration
 
@@ -382,7 +432,7 @@ clipterm send
 clipterm receive
 ```
 
-The first stage still only implements local image smart paste.
+The first stage still only implements local CLI/agent smart paste.
 
 ## Technical Stack Direction
 
@@ -416,9 +466,9 @@ Clipboard access, app rules, paste events, and platform integration should be ab
 ## Open Questions
 
 - Should the first implementation target macOS only, or macOS and Windows together?
-- Which `native` / `path` app rules should ship in the first version?
-- How should clipterm minimize user impact when intercepting normal `Cmd+V` / `Ctrl+V` fails?
-- Should clipterm provide a force-path-paste fallback shortcut?
+- Should the Windows version also use `Ctrl+Shift+V` as the CLI/agent smart paste shortcut?
+- If future versions explore normal `Cmd+V` / `Ctrl+V` interception, how should clipterm minimize user impact?
+- Should the current `Cmd+Shift+V` smart paste shortcut be configurable?
 - Should clipboard restoration be enabled by default, opt-in, or deferred entirely?
 - Should generated paths be shell-escaped when pasted, or pasted as raw absolute paths?
 - Should fine-grained browser input detection be deferred to a later version?
