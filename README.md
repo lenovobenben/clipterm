@@ -73,7 +73,27 @@ clipterm doctor --request-permissions
 clipterm daemon
 ```
 
-Then copy a screenshot or a file in Finder and press `Cmd+Shift+V` in any focused text input.
+`clipterm daemon` starts a background process and returns immediately. Then copy a screenshot or a file in Finder and press `Cmd+Shift+V` in any focused text input.
+
+Check or stop the background daemon:
+
+```bash
+clipterm daemon --status
+clipterm daemon --stop
+```
+
+Run in the foreground for debugging:
+
+```bash
+clipterm daemon --foreground --debug-hotkeys
+```
+
+Daemon logs are written to:
+
+```text
+~/Library/Logs/clipterm/daemon.log
+~/Library/Logs/clipterm/daemon.err.log
+```
 
 ---
 

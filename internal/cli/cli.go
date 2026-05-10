@@ -10,6 +10,7 @@ import (
 
 	"github.com/lenovobenben/clipterm/internal/clipboard"
 	"github.com/lenovobenben/clipterm/internal/clipterm"
+	"github.com/lenovobenben/clipterm/internal/daemon"
 	"github.com/lenovobenben/clipterm/internal/paste"
 	"github.com/lenovobenben/clipterm/internal/version"
 )
@@ -79,10 +80,48 @@ func runDaemon(ctx context.Context, args []string, stdout, stderr io.Writer) int
 	flags := flag.NewFlagSet("daemon", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 
+	foreground := flags.Bool("foreground", false, "run daemon in the foreground")
+	stopDaemon := flags.Bool("stop", false, "stop the background daemon")
+	statusDaemon := flags.Bool("status", false, "show background daemon status")
 	debugHotkeys := flags.Bool("debug-hotkeys", false, "print captured key codes while daemon is running")
 
 	if err := flags.Parse(args); err != nil {
 		return 2
+	}
+
+	switch {
+	case *stopDaemon:
+		if err := daemon.Stop(); err != nil {
+			printCommandError(stderr, err)
+			return 1
+		}
+		fmt.Fprintln(stdout, "daemon stopped")
+		return 0
+	case *statusDaemon:
+		status, err := daemon.CurrentStatus()
+		if err != nil {
+			printCommandError(stderr, err)
+			return 1
+		}
+		fmt.Fprintf(stdout, "running: %s\n", yesNoString(status.Running))
+		if status.PID > 0 {
+			fmt.Fprintf(stdout, "pid: %d\n", status.PID)
+		}
+		return 0
+	case !*foreground:
+		status, err := daemon.Start(ctx, daemon.StartOptions{
+			DebugHotkeys: *debugHotkeys,
+		})
+		if err != nil {
+			printCommandError(stderr, err)
+			return 1
+		}
+		fmt.Fprintf(stdout, "daemon started pid=%d\n", status.PID)
+		logDir, err := daemon.LogDir()
+		if err == nil {
+			fmt.Fprintf(stdout, "logs: %s\n", logDir)
+		}
+		return 0
 	}
 
 	service := clipterm.NewService()
@@ -154,7 +193,9 @@ Copy screenshot. Paste path anywhere.
 
 Usage:
   clipterm paste [--copy-path] [--send-paste]
-  clipterm daemon [--debug-hotkeys]
+  clipterm daemon [--foreground] [--debug-hotkeys]
+  clipterm daemon --status
+  clipterm daemon --stop
   clipterm clean
   clipterm doctor [--request-permissions]
   clipterm rules
@@ -184,4 +225,11 @@ func statusString(ok bool) string {
 		return "ok"
 	}
 	return "unavailable"
+}
+
+func yesNoString(ok bool) string {
+	if ok {
+		return "yes"
+	}
+	return "no"
 }
