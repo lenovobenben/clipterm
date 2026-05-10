@@ -14,6 +14,10 @@ func (systemClipboard) ReadImage(ctx context.Context) (Image, error) {
 	return Image{}, ErrUnsupported
 }
 
+func (systemClipboard) ReadFiles(ctx context.Context) ([]FileRef, error) {
+	return nil, ErrUnsupported
+}
+
 func (systemClipboard) CanWriteText(ctx context.Context) bool {
 	return false
 }

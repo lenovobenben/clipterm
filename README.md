@@ -14,6 +14,69 @@ The goal is to make local shells, WSL, SSH sessions, tmux environments, and AI c
 
 ---
 
+# Current Prototype
+
+The current macOS prototype supports:
+
+```bash
+clipterm paste
+clipterm paste --copy-path
+clipterm paste --copy-path --send-paste
+clipterm daemon
+clipterm doctor --request-permissions
+clipterm version
+```
+
+On macOS, `clipterm daemon` listens for `Cmd+Shift+V`. When the clipboard contains an image, it saves the image to the user cache directory, copies the generated path, and sends a normal paste event to the focused app.
+
+Current clipboard behavior:
+
+- `Cmd+Shift+V` is a "convert to path and paste" action.
+- After conversion, the system clipboard contains the generated path text.
+- You can press normal `Cmd+V` repeatedly to paste that same path until you copy something else.
+- The prototype does not yet restore the original image or file clipboard object after path paste.
+
+Required macOS permissions:
+
+- Input Monitoring / keyboard event access for the daemon hotkey.
+- Accessibility for synthetic paste.
+
+Run:
+
+```bash
+clipterm doctor --request-permissions
+```
+
+to request the required permissions.
+
+## Local Development
+
+Build and test:
+
+```bash
+make build
+make test
+```
+
+Install to `~/.local/bin/clipterm`:
+
+```bash
+make install
+```
+
+Make sure `~/.local/bin` is on your `PATH`.
+
+Run the daemon:
+
+```bash
+clipterm doctor --request-permissions
+clipterm daemon
+```
+
+Then copy a screenshot or a file in Finder and press `Cmd+Shift+V` in any focused text input.
+
+---
+
 # Problem Statement
 
 Terminal environments still operate mostly on plain text semantics.

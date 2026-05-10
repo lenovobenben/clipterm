@@ -11,6 +11,7 @@ import (
 	"github.com/lenovobenben/clipterm/internal/clipboard"
 	"github.com/lenovobenben/clipterm/internal/clipterm"
 	"github.com/lenovobenben/clipterm/internal/paste"
+	"github.com/lenovobenben/clipterm/internal/version"
 )
 
 func Run(args []string, stdout, stderr io.Writer) int {
@@ -27,8 +28,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	case "paste":
 		return runPaste(ctx, commandArgs, stdout, stderr)
 	case "daemon":
-		fmt.Fprintln(stderr, "clipterm daemon is not implemented yet")
-		return 1
+		return runDaemon(ctx, commandArgs, stdout, stderr)
 	case "clean":
 		fmt.Fprintln(stderr, "clipterm clean is not implemented yet")
 		return 1
@@ -37,6 +37,9 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	case "rules":
 		fmt.Fprintln(stderr, "clipterm rules is not implemented yet")
 		return 1
+	case "version":
+		fmt.Fprintln(stdout, version.Version)
+		return 0
 	case "help", "-h", "--help":
 		printUsage(stdout)
 		return 0
@@ -72,6 +75,43 @@ func runPaste(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 	return 0
 }
 
+func runDaemon(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	flags := flag.NewFlagSet("daemon", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+
+	debugHotkeys := flags.Bool("debug-hotkeys", false, "print captured key codes while daemon is running")
+
+	if err := flags.Parse(args); err != nil {
+		return 2
+	}
+
+	service := clipterm.NewService()
+	fmt.Fprintln(stderr, "clipterm daemon listening on Cmd+Shift+V")
+
+	err := service.RunDaemon(ctx, clipterm.DaemonOptions{
+		DebugHotkeys: *debugHotkeys,
+	}, func(ctx context.Context) {
+		path, err := service.Paste(ctx, clipterm.PasteOptions{
+			CopyPath:  true,
+			SendPaste: true,
+		})
+		if err != nil {
+			if errors.Is(err, clipboard.ErrNoImage) {
+				return
+			}
+			printCommandError(stderr, err)
+			return
+		}
+		fmt.Fprintln(stdout, path)
+	})
+	if err != nil && !errors.Is(err, context.Canceled) {
+		printCommandError(stderr, err)
+		return 1
+	}
+
+	return 0
+}
+
 func runDoctor(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	flags := flag.NewFlagSet("doctor", flag.ContinueOnError)
 	flags.SetOutput(stderr)
@@ -84,6 +124,11 @@ func runDoctor(ctx context.Context, args []string, stdout, stderr io.Writer) int
 
 	service := clipterm.NewService()
 	if *requestPermissions {
+		if service.RequestHotkeyPermission(ctx) {
+			fmt.Fprintln(stdout, "global hotkey permission is already available")
+		} else {
+			fmt.Fprintln(stdout, "global hotkey permission was requested; approve clipterm in System Settings if prompted")
+		}
 		if service.RequestPastePermission(ctx) {
 			fmt.Fprintln(stdout, "synthetic paste permission is already available")
 		} else {
@@ -95,6 +140,8 @@ func runDoctor(ctx context.Context, args []string, stdout, stderr io.Writer) int
 	fmt.Fprintf(stdout, "cache_dir: %s\n", report.CacheDir)
 	fmt.Fprintf(stdout, "clipboard_text_write: %s\n", statusString(report.CanWriteClipboardText))
 	fmt.Fprintf(stdout, "clipboard_image_read: %s\n", report.ClipboardImageRead)
+	fmt.Fprintf(stdout, "clipboard_file_read: %s\n", report.ClipboardFileRead)
+	fmt.Fprintf(stdout, "global_hotkey: %s\n", statusString(report.CanListenHotkey))
 	fmt.Fprintf(stdout, "synthetic_paste: %s\n", statusString(report.CanSendPaste))
 	return 0
 }
@@ -107,17 +154,22 @@ Copy screenshot. Paste path anywhere.
 
 Usage:
   clipterm paste [--copy-path] [--send-paste]
-  clipterm daemon
+  clipterm daemon [--debug-hotkeys]
   clipterm clean
   clipterm doctor [--request-permissions]
   clipterm rules
+  clipterm version
 `)+"\n")
 }
 
 func printCommandError(w io.Writer, err error) {
 	switch {
 	case errors.Is(err, clipboard.ErrNoImage):
-		fmt.Fprintln(w, "clipboard does not contain a supported image")
+		fmt.Fprintln(w, "clipboard does not contain a supported image or single file")
+	case errors.Is(err, clipboard.ErrNoFile):
+		fmt.Fprintln(w, "clipboard does not contain a supported image or single file")
+	case errors.Is(err, clipboard.ErrMultiFile):
+		fmt.Fprintln(w, "clipboard contains multiple files; only single-file path paste is supported")
 	case errors.Is(err, clipboard.ErrUnsupported):
 		fmt.Fprintln(w, "clipboard image reading is not supported by this build yet")
 	case errors.Is(err, paste.ErrUnsupported):

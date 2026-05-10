@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/lenovobenben/clipterm/internal/clipboard"
+	"github.com/lenovobenben/clipterm/internal/hotkey"
 	"github.com/lenovobenben/clipterm/internal/materialize"
 	"github.com/lenovobenben/clipterm/internal/paste"
 )
@@ -15,15 +16,22 @@ type PasteOptions struct {
 	SendPaste bool
 }
 
+type DaemonOptions struct {
+	DebugHotkeys bool
+}
+
 type DoctorReport struct {
 	CacheDir              string
 	CanWriteClipboardText bool
 	ClipboardImageRead    string
+	ClipboardFileRead     string
+	CanListenHotkey       bool
 	CanSendPaste          bool
 }
 
 type Service struct {
 	clipboard   clipboard.Clipboard
+	hotkey      hotkey.Listener
 	materialize *materialize.Service
 	paste       paste.Sender
 }
@@ -31,12 +39,37 @@ type Service struct {
 func NewService() *Service {
 	return &Service{
 		clipboard:   clipboard.NewSystemClipboard(),
+		hotkey:      hotkey.NewListener(),
 		materialize: materialize.NewService(),
 		paste:       paste.NewSystemSender(),
 	}
 }
 
 func (s *Service) Paste(ctx context.Context, options PasteOptions) (string, error) {
+	files, err := s.clipboard.ReadFiles(ctx)
+	if err == nil {
+		if len(files) == 0 {
+			return "", clipboard.ErrNoFile
+		}
+		if len(files) > 1 {
+			return "", clipboard.ErrMultiFile
+		}
+
+		path := files[0].Path
+		if path == "" {
+			return "", clipboard.ErrNoFile
+		}
+		if err := s.outputPath(ctx, path, options); err != nil {
+			return "", err
+		}
+
+		return path, nil
+	}
+
+	if !errors.Is(err, clipboard.ErrNoFile) {
+		return "", err
+	}
+
 	image, err := s.clipboard.ReadImage(ctx)
 	if err != nil {
 		return "", err
@@ -47,22 +80,30 @@ func (s *Service) Paste(ctx context.Context, options PasteOptions) (string, erro
 		return "", err
 	}
 
+	if err := s.outputPath(ctx, path, options); err != nil {
+		return "", err
+	}
+
+	return path, nil
+}
+
+func (s *Service) outputPath(ctx context.Context, path string, options PasteOptions) error {
 	if options.CopyPath || options.SendPaste {
 		if err := s.clipboard.WriteText(ctx, path); err != nil {
-			return "", err
+			return err
 		}
 	}
 
 	if options.SendPaste {
 		if err := waitForClipboard(ctx); err != nil {
-			return "", err
+			return err
 		}
 		if err := s.paste.SendPaste(ctx); err != nil {
-			return "", err
+			return err
 		}
 	}
 
-	return path, nil
+	return nil
 }
 
 func (s *Service) Doctor(ctx context.Context) DoctorReport {
@@ -89,6 +130,22 @@ func (s *Service) Doctor(ctx context.Context) DoctorReport {
 	default:
 		report.ClipboardImageRead = "error"
 	}
+
+	files, err := s.clipboard.ReadFiles(ctx)
+	switch {
+	case err == nil && len(files) == 1:
+		report.ClipboardFileRead = "ok"
+	case err == nil && len(files) > 1:
+		report.ClipboardFileRead = "multiple"
+	case errors.Is(err, clipboard.ErrNoFile):
+		report.ClipboardFileRead = "no_file"
+	case errors.Is(err, clipboard.ErrUnsupported):
+		report.ClipboardFileRead = "unavailable"
+	default:
+		report.ClipboardFileRead = "error"
+	}
+
+	report.CanListenHotkey = s.hotkey.CanListen(ctx)
 	report.CanSendPaste = s.paste.CanSendPaste(ctx)
 
 	return report
@@ -96,6 +153,16 @@ func (s *Service) Doctor(ctx context.Context) DoctorReport {
 
 func (s *Service) RequestPastePermission(ctx context.Context) bool {
 	return s.paste.RequestPastePermission(ctx)
+}
+
+func (s *Service) RequestHotkeyPermission(ctx context.Context) bool {
+	return s.hotkey.RequestPermission(ctx)
+}
+
+func (s *Service) RunDaemon(ctx context.Context, options DaemonOptions, handler func(context.Context)) error {
+	return s.hotkey.Run(ctx, hotkey.Options{
+		Debug: options.DebugHotkeys,
+	}, handler)
 }
 
 func waitForClipboard(ctx context.Context) error {

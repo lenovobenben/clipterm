@@ -23,6 +23,14 @@ static CliptermImageResult clipterm_error(const char *message) {
     return result;
 }
 
+static CliptermFilesResult clipterm_files_error(const char *message) {
+    CliptermFilesResult result;
+    result.paths = NULL;
+    result.count = 0;
+    result.err = clipterm_copy_error(message);
+    return result;
+}
+
 static CliptermImageResult clipterm_data_result(NSData *data) {
     CliptermImageResult result;
     result.data = NULL;
@@ -102,5 +110,107 @@ void clipterm_free_image_result(CliptermImageResult result) {
     }
     if (result.err != NULL) {
         free(result.err);
+    }
+}
+
+CliptermFilesResult clipterm_read_clipboard_files(void) {
+    @autoreleasepool {
+        NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
+        NSArray *urls = [pasteboard readObjectsForClasses:@[[NSURL class]] options:@{
+            NSPasteboardURLReadingFileURLsOnlyKey: @YES
+        }];
+
+        if (urls == nil || [urls count] == 0) {
+            return clipterm_files_error("no file in clipboard");
+        }
+
+        if ([urls count] > INT_MAX) {
+            return clipterm_files_error("too many files in clipboard");
+        }
+
+        char **paths = calloc([urls count], sizeof(char *));
+        if (paths == NULL) {
+            return clipterm_files_error("failed to allocate file list");
+        }
+
+        int count = 0;
+        for (NSURL *url in urls) {
+            if (![url isFileURL]) {
+                continue;
+            }
+
+            NSString *path = [url path];
+            if (path == nil) {
+                continue;
+            }
+
+            const char *utf8 = [path UTF8String];
+            if (utf8 == NULL) {
+                continue;
+            }
+
+            paths[count] = clipterm_copy_error(utf8);
+            if (paths[count] == NULL) {
+                for (int i = 0; i < count; i++) {
+                    free(paths[i]);
+                }
+                free(paths);
+                return clipterm_files_error("failed to copy file path");
+            }
+            count++;
+        }
+
+        if (count == 0) {
+            free(paths);
+            return clipterm_files_error("no file in clipboard");
+        }
+
+        CliptermFilesResult result;
+        result.paths = paths;
+        result.count = count;
+        result.err = NULL;
+        return result;
+    }
+}
+
+void clipterm_free_files_result(CliptermFilesResult result) {
+    if (result.paths != NULL) {
+        for (int i = 0; i < result.count; i++) {
+            if (result.paths[i] != NULL) {
+                free(result.paths[i]);
+            }
+        }
+        free(result.paths);
+    }
+    if (result.err != NULL) {
+        free(result.err);
+    }
+}
+
+char *clipterm_write_clipboard_text(const char *text) {
+    @autoreleasepool {
+        if (text == NULL) {
+            return clipterm_copy_error("text is null");
+        }
+
+        NSString *string = [NSString stringWithUTF8String:text];
+        if (string == nil) {
+            return clipterm_copy_error("text is not valid UTF-8");
+        }
+
+        NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
+        [pasteboard clearContents];
+        BOOL ok = [pasteboard setString:string forType:NSPasteboardTypeString];
+        if (!ok) {
+            return clipterm_copy_error("failed to write clipboard text");
+        }
+
+        return NULL;
+    }
+}
+
+void clipterm_free_error(char *err) {
+    if (err != NULL) {
+        free(err);
     }
 }

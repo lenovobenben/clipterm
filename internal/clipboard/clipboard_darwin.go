@@ -11,8 +11,6 @@ import "C"
 
 import (
 	"context"
-	"io"
-	"os/exec"
 	"unsafe"
 )
 
@@ -52,32 +50,68 @@ func (systemClipboard) ReadImage(ctx context.Context) (Image, error) {
 	}, nil
 }
 
+func (systemClipboard) ReadFiles(ctx context.Context) ([]FileRef, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
+	result := C.clipterm_read_clipboard_files()
+	defer C.clipterm_free_files_result(result)
+
+	if result.err != nil {
+		err := C.GoString(result.err)
+		if err == "no file in clipboard" {
+			return nil, ErrNoFile
+		}
+		return nil, ErrUnsupported
+	}
+
+	if result.paths == nil || result.count <= 0 {
+		return nil, ErrNoFile
+	}
+
+	paths := unsafe.Slice(result.paths, int(result.count))
+	files := make([]FileRef, 0, int(result.count))
+	for _, path := range paths {
+		if path == nil {
+			continue
+		}
+		files = append(files, FileRef{Path: C.GoString(path)})
+	}
+
+	if len(files) == 0 {
+		return nil, ErrNoFile
+	}
+
+	return files, nil
+}
+
 func (systemClipboard) CanWriteText(ctx context.Context) bool {
-	_, err := exec.LookPath("pbcopy")
-	return err == nil
+	select {
+	case <-ctx.Done():
+		return false
+	default:
+		return true
+	}
 }
 
 func (systemClipboard) WriteText(ctx context.Context, text string) error {
-	cmd := exec.CommandContext(ctx, "pbcopy")
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return err
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
 	}
 
-	if err := cmd.Start(); err != nil {
-		return err
+	cText := C.CString(text)
+	defer C.free(unsafe.Pointer(cText))
+
+	errText := C.clipterm_write_clipboard_text(cText)
+	defer C.clipterm_free_error(errText)
+	if errText != nil {
+		return ErrUnsupported
 	}
 
-	if _, err := io.WriteString(stdin, text); err != nil {
-		_ = stdin.Close()
-		_ = cmd.Wait()
-		return err
-	}
-
-	if err := stdin.Close(); err != nil {
-		_ = cmd.Wait()
-		return err
-	}
-
-	return cmd.Wait()
+	return nil
 }
