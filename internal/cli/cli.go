@@ -31,8 +31,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	case "daemon":
 		return runDaemon(ctx, commandArgs, stdout, stderr)
 	case "clean":
-		fmt.Fprintln(stderr, "clipterm clean is not implemented yet")
-		return 1
+		return runClean(ctx, commandArgs, stdout, stderr)
 	case "doctor":
 		return runDoctor(ctx, commandArgs, stdout, stderr)
 	case "rules":
@@ -49,6 +48,41 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		printUsage(stderr)
 		return 2
 	}
+}
+
+func runClean(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	flags := flag.NewFlagSet("clean", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+
+	days := flags.Int("days", 7, "remove cached clipterm images older than this many days")
+	dryRun := flags.Bool("dry-run", false, "show files that would be removed without deleting them")
+
+	if err := flags.Parse(args); err != nil {
+		return 2
+	}
+
+	result, err := clipterm.NewService().Clean(ctx, clipterm.CleanOptions{
+		Days:   *days,
+		DryRun: *dryRun,
+	})
+	if err != nil {
+		printCommandError(stderr, err)
+		return 1
+	}
+
+	action := "removed"
+	if result.DryRun {
+		action = "would_remove"
+	}
+
+	fmt.Fprintf(stdout, "cache_dir: %s\n", result.CacheDir)
+	fmt.Fprintf(stdout, "%s_files: %d\n", action, len(result.Files))
+	fmt.Fprintf(stdout, "%s_bytes: %d\n", action, result.Bytes)
+	for _, path := range result.Files {
+		fmt.Fprintln(stdout, path)
+	}
+
+	return 0
 }
 
 func runPaste(ctx context.Context, args []string, stdout, stderr io.Writer) int {
@@ -196,7 +230,7 @@ Usage:
   clipterm daemon [--foreground] [--debug-hotkeys]
   clipterm daemon --status
   clipterm daemon --stop
-  clipterm clean
+  clipterm clean [--days 7] [--dry-run]
   clipterm doctor [--request-permissions]
   clipterm rules
   clipterm version

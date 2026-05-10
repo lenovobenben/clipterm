@@ -82,6 +82,15 @@ clipterm daemon --status
 clipterm daemon --stop
 ```
 
+Clean generated screenshot files:
+
+```bash
+clipterm clean --dry-run
+clipterm clean --days 7
+```
+
+`clipterm clean` only removes managed cache images matching `clipterm-*.png` under the clipterm cache directory.
+
 Run in the foreground for debugging:
 
 ```bash

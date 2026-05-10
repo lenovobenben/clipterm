@@ -20,6 +20,11 @@ type DaemonOptions struct {
 	DebugHotkeys bool
 }
 
+type CleanOptions struct {
+	Days   int
+	DryRun bool
+}
+
 type DoctorReport struct {
 	CacheDir              string
 	CanWriteClipboardText bool
@@ -157,6 +162,13 @@ func (s *Service) RequestPastePermission(ctx context.Context) bool {
 
 func (s *Service) RequestHotkeyPermission(ctx context.Context) bool {
 	return s.hotkey.RequestPermission(ctx)
+}
+
+func (s *Service) Clean(ctx context.Context, options CleanOptions) (materialize.CleanResult, error) {
+	return s.materialize.Clean(ctx, materialize.CleanOptions{
+		Days:   options.Days,
+		DryRun: options.DryRun,
+	})
 }
 
 func (s *Service) RunDaemon(ctx context.Context, options DaemonOptions, handler func(context.Context)) error {
