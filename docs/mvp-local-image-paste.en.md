@@ -219,12 +219,33 @@ Important native-paste targets:
 
 ### Windows
 
-Second first-class target after the macOS proof of concept.
+Second first-class target after the macOS proof of concept. The Windows version is a multi-platform implementation of the same product semantics; it does not change the `Cmd+Shift+V` / `Ctrl+Shift+V` smart paste model.
+
+Scope:
+
+- Support Windows x86_64 only.
+- Do not support Windows ARM.
+- Use `Ctrl+Shift+V` as the fixed CLI/agent smart paste shortcut.
+- Match the current macOS `Cmd+Shift+V` behavior.
 
 - Normal paste shortcut: `Ctrl+V`
-- Candidate CLI/agent smart paste shortcut: `Ctrl+Shift+V`
+- CLI/agent smart paste shortcut: `Ctrl+Shift+V`
 - Cache directory: `%LOCALAPPDATA%\clipterm\cache\`
 - Important permissions: clipboard read/write, keyboard hook, foreground window detection, synthetic keyboard events.
+
+Windows `Ctrl+Shift+V` behavior:
+
+- Screenshot or image stream: save PNG and paste the absolute path.
+- Single copied file: paste the original absolute file path.
+- Normal text and ordinary clipboard content: fall back to native `Ctrl+V` without modifying the clipboard.
+- Multiple files: not supported yet; do not modify the clipboard.
+
+Main platform-specific additions:
+
+- Windows clipboard: read images, read single copied file paths, write Unicode text.
+- Windows global hotkey: register `Ctrl+Shift+V`.
+- Windows synthetic paste: send native `Ctrl+V`.
+- Windows release package: publish x86_64 only.
 
 Important path-paste targets:
 
@@ -235,6 +256,72 @@ Important path-paste targets:
 - Notepad
 - Browser address bars
 - Plain text inputs
+
+### Windows Development Handoff
+
+The first instruction for a future developer or AI agent working in Windows can be:
+
+```text
+Please understand this project first, especially the design documents under docs. The current goal is to complete the native Windows x86_64 implementation, matching the already completed and released macOS version.
+```
+
+When taking over the Windows version, do not redefine the product. Inherit the user model and engineering boundaries already validated by macOS v0.1.0:
+
+- `Ctrl+Shift+V` is the Windows CLI/agent smart paste shortcut, corresponding to macOS `Cmd+Shift+V`.
+- Do not intercept normal `Ctrl+V`. Fully replacing normal paste remains only a future exploration direction, not the current Windows goal.
+- Image, screenshot, single-file, and normal-text behavior must match the current macOS version.
+- Multiple files remain unsupported; do not expand scope for the first Windows release.
+- Windows ARM is not supported; release packages target Windows x86_64 only.
+- The first Windows release is platform-adapter work, not product redesign.
+
+Existing code and design to reuse:
+
+- `internal/clipterm`: core smart paste semantics.
+- `internal/materialize`: cache directory, image materialization, cleanup policy.
+- `internal/daemon`: background process, PID file, idempotent startup, and stale PID handling.
+- `internal/cli`: command entry points and `daemon` / `doctor` / `rules` / `clean` shape.
+- The docs around clipboard objects, path materialization, and remote capability boundaries.
+
+Windows-specific platform layers to add or replace:
+
+- `internal/clipboard/clipboard_windows.go`
+- `internal/hotkey/hotkey_windows.go`
+- `internal/paste/paste_windows.go`
+- Windows x86_64 release packaging target.
+
+Recommended implementation order:
+
+1. Implement the `Ctrl+Shift+V` hotkey and native `Ctrl+V` fallback first, then verify lossless normal text paste.
+2. Implement `CF_HDROP` single-file path reading, then verify Explorer single-file copy into terminals, Notepad, and browser address bars.
+3. Implement image clipboard reading and PNG materialization. Windows clipboard images are commonly DIB/DIBV5, so this is the riskiest part and should be validated separately.
+4. Finish `doctor` capability checks, README installation notes, and the Windows x86_64 release package.
+
+Minimum acceptance criteria for the Windows version:
+
+- Copy normal text, press `Ctrl+Shift+V`, and get native `Ctrl+V` behavior without modifying the clipboard.
+- Copy one file in Explorer, press `Ctrl+Shift+V`, and paste the original absolute file path.
+- Copy a screenshot or image, press `Ctrl+Shift+V`, and paste the generated PNG absolute path.
+- Multiple files are ignored without polluting the clipboard.
+- Starting the daemon repeatedly does not create multiple background processes.
+- The Windows x86_64 package name is user-facing and clear; do not publish a Windows ARM package.
+
+### Windows + WSL Development Notes
+
+When using Codex through WSL on a Windows machine, separate the development environment from the runtime environment under test:
+
+- WSL is a Linux userland and Linux kernel environment, not a Windows process environment.
+- A Go program running inside WSL cannot directly register Windows global hotkeys, use the Windows clipboard APIs, or call `SendInput` as a normal Windows GUI process.
+- The Windows clipterm build must run as a native Windows `.exe` to listen for `Ctrl+Shift+V`, read the Windows clipboard, and send paste events to the focused Windows application.
+- WSL is still useful for editing code, running ordinary Go tests, and testing code paths that do not depend on Win32 GUI integration.
+- Windows platform integration tests need to run in the native Windows environment, such as PowerShell, cmd, Windows Terminal, or by invoking the Windows exe and observing Windows-side behavior.
+
+Recommended workflow:
+
+1. Use WSL/Codex for code editing and most non-GUI logic development.
+2. Build or run `clipterm.exe` in the native Windows environment.
+3. Test `Ctrl+Shift+V` in real Windows focus targets such as Windows Terminal, PowerShell, cmd, Notepad, and browser address bars.
+
+WSL can later become a supported target environment, for example by materializing Windows clipboard objects into WSL paths. That is WSL path bridging and is separate from the first native Windows implementation.
 
 ### Linux Desktop
 
@@ -488,8 +575,8 @@ Clipboard access, app rules, paste events, and platform integration should be ab
 
 ## Open Questions
 
-- Should the first implementation target macOS only, or macOS and Windows together?
-- Should the Windows version also use `Ctrl+Shift+V` as the CLI/agent smart paste shortcut?
+- In the native Windows implementation, should single-file path paste and text fallback ship before image DIB decoding?
+- Should the Windows version recommend startup through something beyond shell startup, such as the Startup folder or Task Scheduler?
 - If future versions explore normal `Cmd+V` / `Ctrl+V` interception, how should clipterm minimize user impact?
 - Should the current `Cmd+Shift+V` smart paste shortcut be configurable?
 - Should clipboard restoration be enabled by default, opt-in, or deferred entirely?

@@ -225,12 +225,33 @@ MVP 的第一优先级平台。
 
 ### Windows
 
-macOS 原型验证后作为第二个一等平台支持。
+macOS 原型验证后作为第二个一等平台支持。Windows 版本是同一产品语义的多平台实现，不改变 `Cmd+Shift+V` / `Ctrl+Shift+V` 智能粘贴模型。
+
+范围：
+
+- 只支持 Windows x86_64。
+- 暂不支持 Windows ARM。
+- CLI/Agent 智能粘贴快捷键固定为 `Ctrl+Shift+V`。
+- 行为与 macOS 当前 `Cmd+Shift+V` 一致。
 
 - 普通粘贴快捷键：`Ctrl+V`
-- 候选 CLI/Agent 智能粘贴快捷键：`Ctrl+Shift+V`
+- CLI/Agent 智能粘贴快捷键：`Ctrl+Shift+V`
 - 缓存目录：`%LOCALAPPDATA%\clipterm\cache\`
 - 需要关注的权限：剪贴板读写、键盘 hook、前台窗口识别、合成键盘事件。
+
+Windows `Ctrl+Shift+V` 行为：
+
+- 截图或图片流：保存 PNG，粘贴绝对路径。
+- 单个文件：粘贴原文件绝对路径。
+- 普通文本和其他普通内容：走原生 `Ctrl+V` fallback，不修改剪贴板。
+- 多文件：暂不支持，不修改剪贴板。
+
+主要新增平台代码：
+
+- Windows 剪贴板：读取图片、读取单文件路径、写入 Unicode 文本。
+- Windows 全局热键：注册 `Ctrl+Shift+V`。
+- Windows 合成粘贴：发送原生 `Ctrl+V`。
+- Windows release 包：只发布 x86_64。
 
 重点路径粘贴目标：
 
@@ -241,6 +262,72 @@ macOS 原型验证后作为第二个一等平台支持。
 - Notepad
 - 浏览器地址栏
 - 普通文本输入框
+
+### Windows 开发交接说明
+
+给 Windows 环境中的后续开发者或 AI Agent 的第一句话可以是：
+
+```text
+请先了解这个项目，尤其是 docs 目录中的设计文档。当前目标是在 Windows x86_64 下完成原生实现，对标已经完成并发布的 macOS 版。
+```
+
+接手 Windows 版本时，不要重新定义产品。应继承 macOS v0.1.0 已经验证过的用户心智和工程边界：
+
+- `Ctrl+Shift+V` 是 Windows 上的 CLI/Agent 智能粘贴，对应 macOS 的 `Cmd+Shift+V`。
+- 普通 `Ctrl+V` 不接管。全面替代普通粘贴只是远景探索，不是当前 Windows 目标。
+- 图片、截图、单文件和普通文本的行为必须与 macOS 当前版本一致。
+- 多文件暂不支持，不能为了 Windows 首版扩大范围。
+- Windows ARM 暂不支持，release 只面向 Windows x86_64。
+- Windows 首版是平台 adapter 工作，不是产品重新设计。
+
+可以复用的现有代码和思想：
+
+- `internal/clipterm`：智能粘贴的核心业务语义。
+- `internal/materialize`：缓存目录、图片落盘、清理策略。
+- `internal/daemon`：后台进程、PID 文件、幂等启动和 stale PID 处理。
+- `internal/cli`：命令入口、`daemon` / `doctor` / `rules` / `clean` 形态。
+- docs 中关于剪贴板对象、路径 materialization、远程能力边界的设计。
+
+Windows 需要新增或替换的平台层：
+
+- `internal/clipboard/clipboard_windows.go`
+- `internal/hotkey/hotkey_windows.go`
+- `internal/paste/paste_windows.go`
+- Windows x86_64 release 打包 target。
+
+建议实现顺序：
+
+1. 先实现 `Ctrl+Shift+V` 热键和原生 `Ctrl+V` fallback，验证普通文本无损粘贴。
+2. 再实现 `CF_HDROP` 单文件路径读取，验证 Explorer 复制单文件到终端、记事本、浏览器地址栏。
+3. 再实现图片剪贴板读取和 PNG 保存。Windows 图片常见为 DIB/DIBV5，这部分风险最高，应单独验证。
+4. 最后补 `doctor` 能力检查、README 安装说明和 Windows x86_64 release 包。
+
+Windows 版完成的最低验收标准：
+
+- 复制普通文本，`Ctrl+Shift+V` 等价于原生 `Ctrl+V`，不修改剪贴板。
+- Explorer 复制单个文件，`Ctrl+Shift+V` 粘贴原文件绝对路径。
+- 复制截图或图片，`Ctrl+Shift+V` 保存 PNG 并粘贴生成的绝对路径。
+- 多文件不处理，并且不污染剪贴板。
+- daemon 重复启动不会产生多个后台进程。
+- Windows x86_64 包名面向用户清晰，不发布 Windows ARM 包。
+
+### Windows + WSL 开发说明
+
+如果在 Windows 机器上通过 WSL 使用 Codex，需要区分“开发环境”和“被测运行环境”：
+
+- WSL 是 Linux 用户态和 Linux 内核环境，不是 Windows 进程环境。
+- 在 WSL 里运行的 Go 程序不能直接注册 Windows 全局热键，也不能直接使用 Windows 剪贴板和 `SendInput`。
+- Windows 版 clipterm 必须作为 Windows 原生 `.exe` 运行，才能监听 `Ctrl+Shift+V`、读取 Windows 剪贴板并向当前 Windows 焦点窗口发送粘贴事件。
+- WSL 可以用来编辑代码、运行普通 Go 测试、调用 `go test` 中不依赖 Win32 GUI 的部分。
+- Windows 平台集成测试需要在 Windows 原生终端中运行，例如 PowerShell、cmd、Windows Terminal，或从 WSL 调用 Windows exe 后观察 Windows 侧行为。
+
+推荐开发方式：
+
+1. 用 WSL/Codex 编辑代码和做大部分非 GUI 逻辑开发。
+2. 在 Windows 原生环境构建或运行 `clipterm.exe`。
+3. 在 Windows Terminal、PowerShell、cmd、Notepad、浏览器地址栏等真实 Windows 焦点窗口中测试 `Ctrl+Shift+V`。
+
+WSL 后续可以作为目标环境之一支持，例如把本地 Windows 剪贴板对象 materialize 到 WSL 文件路径，但这属于 WSL path bridging，不属于 Windows 原生第一版。
 
 ### Linux Desktop
 
@@ -494,8 +581,8 @@ clipterm receive
 
 ## 开放问题
 
-- 第一版应该只做 macOS，还是 macOS 和 Windows 一起做？
-- Windows 版本是否也采用 `Ctrl+Shift+V` 作为 CLI/Agent 智能粘贴快捷键？
+- Windows 原生实现中，是否优先完成单文件路径和文本 fallback，再实现图片 DIB 解码？
+- Windows 版本是否需要 shell startup 以外的启动建议，例如 Startup folder 或 Task Scheduler？
 - 如果未来探索普通 `Cmd+V` / `Ctrl+V` 接管，如何最小化对用户原生粘贴的影响？
 - 是否需要把当前 `Cmd+Shift+V` 智能粘贴做成可配置快捷键？
 - 剪贴板恢复应该默认开启、可选开启，还是完全延后？
