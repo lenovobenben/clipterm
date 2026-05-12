@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 )
@@ -14,6 +15,14 @@ const createNewProcessGroup = 0x00000200
 
 func daemonSysProcAttr() *syscall.SysProcAttr {
 	return &syscall.SysProcAttr{CreationFlags: createNewProcessGroup}
+}
+
+func platformLogDir() (string, error) {
+	base, err := os.UserCacheDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(base, appDir, "logs"), nil
 }
 
 func stopProcess(process *os.Process) error {

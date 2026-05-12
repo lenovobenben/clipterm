@@ -126,11 +126,7 @@ func CurrentStatus() (Status, error) {
 }
 
 func LogDir() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, "Library", "Logs", appDir), nil
+	return platformLogDir()
 }
 
 func PIDPath() (string, error) {

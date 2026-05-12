@@ -176,11 +176,12 @@ Validation commands used for this prototype:
 
 ```bash
 go test ./...
-GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go test ./...
 GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./cmd/clipterm
 GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build ./cmd/clipterm
 go vet ./...
 ```
+
+Windows tests should run on a Windows machine or Windows CI runner. From macOS or Linux, use the Windows `GOOS=windows` command above as a cross-build check rather than a test execution command.
 
 More design detail lives in:
 
