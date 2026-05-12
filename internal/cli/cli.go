@@ -174,6 +174,11 @@ func runDaemon(ctx context.Context, args []string, stdout, stderr io.Writer) int
 			printCommandError(stderr, err)
 			return 1
 		}
+		if status.AlreadyRunning {
+			fmt.Fprintf(stdout, "daemon already running pid=%d\n", status.PID)
+			fmt.Fprintln(stdout, "new options were not applied; stop and restart the daemon to change path style")
+			return 0
+		}
 		fmt.Fprintf(stdout, "daemon started pid=%d\n", status.PID)
 		logDir, err := daemon.LogDir()
 		if err == nil {

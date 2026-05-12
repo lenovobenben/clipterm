@@ -123,7 +123,7 @@ clipterm.exe daemon --path-style wsl
 clipboard object -> Windows path -> output path transform -> clipboard text -> Ctrl+V
 ```
 
-修改路径风格需要重启 daemon。当前不做配置热加载。
+修改路径风格需要先停止再重启 daemon。daemon 已经运行时再次执行 `clipterm.exe daemon --path-style ...` 不会改变当前 daemon；当前版本不做配置热加载。
 
 ### Windows 已验证目标
 

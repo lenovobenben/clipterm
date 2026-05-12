@@ -19,8 +19,9 @@ type StartOptions struct {
 }
 
 type Status struct {
-	Running bool
-	PID     int
+	Running        bool
+	PID            int
+	AlreadyRunning bool
 }
 
 func Start(ctx context.Context, options StartOptions) (Status, error) {
@@ -29,6 +30,7 @@ func Start(ctx context.Context, options StartOptions) (Status, error) {
 		return Status{}, err
 	}
 	if status.Running {
+		status.AlreadyRunning = true
 		return status, nil
 	}
 

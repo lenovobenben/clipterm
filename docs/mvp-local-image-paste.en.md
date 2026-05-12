@@ -123,7 +123,7 @@ Path conversion happens before writing text to the clipboard:
 clipboard object -> Windows path -> output path transform -> clipboard text -> Ctrl+V
 ```
 
-Changing path style requires restarting the daemon. The current version does not hot-reload config.
+Changing path style requires stopping and restarting the daemon. Running `clipterm.exe daemon --path-style ...` while the daemon is already running does not change the active daemon; the current version does not hot-reload config.
 
 ### Validated Windows Targets
 

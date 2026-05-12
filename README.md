@@ -82,7 +82,7 @@ clipterm.exe daemon --path-style windows
 clipterm.exe daemon --path-style wsl
 ```
 
-Use `windows` for native Windows shells such as PowerShell and `wsl` when the target expects paths like `/mnt/c/Users/Alice/...`. Changing path style requires restarting the daemon.
+Use `windows` for native Windows shells such as PowerShell and `wsl` when the target expects paths like `/mnt/c/Users/Alice/...`. Changing path style requires stopping and restarting the daemon; running `clipterm.exe daemon --path-style ...` while the daemon is already running does not change the active daemon.
 
 Known limitation: Notepad++ is not supported by the first Windows prototype. clipterm successfully writes the path text to the system clipboard, but Notepad++ handles the synthetic paste event during `Ctrl+Shift+V` differently from Notepad, browser address bars, PowerShell, Windows Terminal, and WSL terminals. This is a target-application compatibility issue, not a path conversion or clipboard write failure.
 
