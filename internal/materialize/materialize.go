@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -73,6 +74,9 @@ func (s *Service) CacheDir() (string, error) {
 	base, err := os.UserCacheDir()
 	if err != nil {
 		return "", err
+	}
+	if runtime.GOOS == "windows" {
+		return filepath.Join(base, appDir, "cache"), nil
 	}
 	return filepath.Join(base, appDir), nil
 }

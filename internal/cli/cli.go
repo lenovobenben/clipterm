@@ -6,12 +6,14 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"runtime"
 	"strings"
 
 	"github.com/lenovobenben/clipterm/internal/clipboard"
 	"github.com/lenovobenben/clipterm/internal/clipterm"
 	"github.com/lenovobenben/clipterm/internal/daemon"
 	"github.com/lenovobenben/clipterm/internal/paste"
+	"github.com/lenovobenben/clipterm/internal/pathstyle"
 	"github.com/lenovobenben/clipterm/internal/version"
 )
 
@@ -58,7 +60,7 @@ func runRules(args []string, stdout, stderr io.Writer) int {
 	}
 
 	fmt.Fprintln(stdout, "mode: cli-agent-smart-paste")
-	fmt.Fprintln(stdout, "hotkey: Cmd+Shift+V")
+	fmt.Fprintf(stdout, "hotkey: %s\n", smartPasteHotkey())
 	fmt.Fprintln(stdout, "app_rules: disabled")
 	fmt.Fprintln(stdout, "native_image_paste: not intercepted")
 	fmt.Fprintln(stdout, "path_paste: image clipboard -> cache file -> path text")
@@ -109,6 +111,7 @@ func runPaste(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 
 	copyPath := flags.Bool("copy-path", false, "copy generated path to the clipboard")
 	sendPaste := flags.Bool("send-paste", false, "send a synthetic paste event after copying the path")
+	outputPathStyle := flags.String("path-style", defaultPathStyle(), "output path style: native, windows, or wsl")
 
 	if err := flags.Parse(args); err != nil {
 		return 2
@@ -118,6 +121,7 @@ func runPaste(ctx context.Context, args []string, stdout, stderr io.Writer) int 
 	path, err := service.Paste(ctx, clipterm.PasteOptions{
 		CopyPath:  *copyPath,
 		SendPaste: *sendPaste,
+		PathStyle: *outputPathStyle,
 	})
 	if err != nil {
 		printCommandError(stderr, err)
@@ -136,6 +140,7 @@ func runDaemon(ctx context.Context, args []string, stdout, stderr io.Writer) int
 	stopDaemon := flags.Bool("stop", false, "stop the background daemon")
 	statusDaemon := flags.Bool("status", false, "show background daemon status")
 	debugHotkeys := flags.Bool("debug-hotkeys", false, "print captured key codes while daemon is running")
+	outputPathStyle := flags.String("path-style", defaultPathStyle(), "output path style: native, windows, or wsl")
 
 	if err := flags.Parse(args); err != nil {
 		return 2
@@ -163,6 +168,7 @@ func runDaemon(ctx context.Context, args []string, stdout, stderr io.Writer) int
 	case !*foreground:
 		status, err := daemon.Start(ctx, daemon.StartOptions{
 			DebugHotkeys: *debugHotkeys,
+			PathStyle:    *outputPathStyle,
 		})
 		if err != nil {
 			printCommandError(stderr, err)
@@ -177,15 +183,33 @@ func runDaemon(ctx context.Context, args []string, stdout, stderr io.Writer) int
 	}
 
 	service := clipterm.NewService()
-	fmt.Fprintln(stderr, "clipterm daemon listening on Cmd+Shift+V")
+	fmt.Fprintf(stderr, "clipterm daemon listening on %s\n", smartPasteHotkey())
+	if *debugHotkeys {
+		clipboard.SetDebugLogger(func(format string, args ...any) {
+			fmt.Fprintf(stderr, "debug: "+format+"\n", args...)
+		})
+		paste.SetDebugLogger(func(format string, args ...any) {
+			fmt.Fprintf(stderr, "debug: "+format+"\n", args...)
+		})
+		defer clipboard.SetDebugLogger(nil)
+		defer paste.SetDebugLogger(nil)
+	}
 
 	err := service.RunDaemon(ctx, clipterm.DaemonOptions{
 		DebugHotkeys: *debugHotkeys,
 	}, func(ctx context.Context) {
-		result, err := service.SmartPaste(ctx)
+		result, err := service.SmartPaste(ctx, clipterm.SmartPasteOptions{
+			PathStyle: *outputPathStyle,
+		})
 		if err != nil {
+			if *debugHotkeys {
+				fmt.Fprintf(stderr, "debug: smart paste error: %v\n", err)
+			}
 			printCommandError(stderr, err)
 			return
+		}
+		if *debugHotkeys {
+			fmt.Fprintf(stderr, "debug: smart paste result path=%q native=%v\n", result.Path, result.NativePaste)
 		}
 		if result.Path != "" {
 			fmt.Fprintln(stdout, result.Path)
@@ -240,8 +264,8 @@ clipterm
 Copy screenshot. Paste path anywhere.
 
 Usage:
-  clipterm paste [--copy-path] [--send-paste]
-  clipterm daemon [--foreground] [--debug-hotkeys]
+  clipterm paste [--copy-path] [--send-paste] [--path-style native|windows|wsl]
+  clipterm daemon [--foreground] [--debug-hotkeys] [--path-style native|windows|wsl]
   clipterm daemon --status
   clipterm daemon --stop
   clipterm clean [--days 7] [--dry-run]
@@ -261,6 +285,8 @@ func printCommandError(w io.Writer, err error) {
 		fmt.Fprintln(w, "clipboard contains multiple files; only single-file path paste is supported")
 	case errors.Is(err, clipboard.ErrUnsupported):
 		fmt.Fprintln(w, "clipboard image reading is not supported by this build yet")
+	case errors.Is(err, pathstyle.ErrUnsupported):
+		fmt.Fprintln(w, "unsupported path style")
 	case errors.Is(err, paste.ErrUnsupported):
 		fmt.Fprintln(w, "synthetic paste is not supported or not permitted by this build")
 	default:
@@ -280,4 +306,18 @@ func yesNoString(ok bool) string {
 		return "yes"
 	}
 	return "no"
+}
+
+func defaultPathStyle() string {
+	if runtime.GOOS == "windows" {
+		return pathstyle.Windows
+	}
+	return pathstyle.Native
+}
+
+func smartPasteHotkey() string {
+	if runtime.GOOS == "windows" {
+		return "Ctrl+Shift+V"
+	}
+	return "Cmd+Shift+V"
 }

@@ -123,7 +123,7 @@ func TestSmartPasteFallsBackToNativePaste(t *testing.T) {
 		paste:       sender,
 	}
 
-	result, err := svc.SmartPaste(context.Background())
+	result, err := svc.SmartPaste(context.Background(), SmartPasteOptions{})
 	if err != nil {
 		t.Fatalf("SmartPaste returned error: %v", err)
 	}
@@ -183,7 +183,7 @@ func TestSmartPasteRejectsMultipleFilesWithoutNativeFallback(t *testing.T) {
 		paste:       sender,
 	}
 
-	_, err := svc.SmartPaste(context.Background())
+	_, err := svc.SmartPaste(context.Background(), SmartPasteOptions{})
 	if !errors.Is(err, clipboard.ErrMultiFile) {
 		t.Fatalf("error = %v, want ErrMultiFile", err)
 	}
@@ -192,5 +192,28 @@ func TestSmartPasteRejectsMultipleFilesWithoutNativeFallback(t *testing.T) {
 	}
 	if sender.sendCount != 0 {
 		t.Fatalf("sendCount = %d, want 0", sender.sendCount)
+	}
+}
+
+func TestPasteTransformsOutputPathForClipboard(t *testing.T) {
+	cb := &fakeClipboard{
+		files: []clipboard.FileRef{{Path: `C:\Users\Alice\Desktop\a.txt`}},
+	}
+	svc := &Service{
+		clipboard:   cb,
+		hotkey:      hotkey.NewListener(),
+		materialize: materialize.NewService(),
+		paste:       paste.NewSystemSender(),
+	}
+
+	path, err := svc.Paste(context.Background(), PasteOptions{CopyPath: true, PathStyle: "wsl"})
+	if err != nil {
+		t.Fatalf("Paste returned error: %v", err)
+	}
+	if path != "/mnt/c/Users/Alice/Desktop/a.txt" {
+		t.Fatalf("path = %q, want WSL path", path)
+	}
+	if cb.writtenText != "/mnt/c/Users/Alice/Desktop/a.txt" {
+		t.Fatalf("written text = %q, want WSL path", cb.writtenText)
 	}
 }

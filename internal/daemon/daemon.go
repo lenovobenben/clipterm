@@ -9,13 +9,13 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 )
 
 const appDir = "clipterm"
 
 type StartOptions struct {
 	DebugHotkeys bool
+	PathStyle    string
 }
 
 type Status struct {
@@ -61,12 +61,15 @@ func Start(ctx context.Context, options StartOptions) (Status, error) {
 	if options.DebugHotkeys {
 		args = append(args, "--debug-hotkeys")
 	}
+	if options.PathStyle != "" {
+		args = append(args, "--path-style", options.PathStyle)
+	}
 
 	cmd := exec.CommandContext(ctx, executable, args...)
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	cmd.Stdin = nil
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.SysProcAttr = daemonSysProcAttr()
 
 	if err := cmd.Start(); err != nil {
 		return Status{}, err
@@ -93,7 +96,7 @@ func Stop() error {
 	if err != nil {
 		return err
 	}
-	if err := process.Signal(syscall.SIGTERM); err != nil && !errors.Is(err, os.ErrProcessDone) {
+	if err := stopProcess(process); err != nil && !errors.Is(err, os.ErrProcessDone) {
 		return err
 	}
 
@@ -177,16 +180,11 @@ func removePID() error {
 }
 
 func processAlive(pid int) bool {
-	process, err := os.FindProcess(pid)
-	if err != nil {
-		return false
-	}
-	err = process.Signal(syscall.Signal(0))
-	return err == nil || errors.Is(err, syscall.EPERM)
+	return platformProcessAlive(pid)
 }
 
 func processLooksLikeDaemon(pid int) bool {
-	output, err := exec.Command("ps", "-p", strconv.Itoa(pid), "-o", "command=").Output()
+	output, err := processCommand(pid)
 	if err != nil {
 		return false
 	}
@@ -200,7 +198,7 @@ func commandLooksLikeDaemon(command string) bool {
 	}
 
 	executable := filepath.Base(fields[0])
-	if executable != "clipterm" {
+	if executable != "clipterm" && executable != "clipterm.exe" {
 		return false
 	}
 

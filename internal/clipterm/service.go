@@ -9,11 +9,17 @@ import (
 	"github.com/lenovobenben/clipterm/internal/hotkey"
 	"github.com/lenovobenben/clipterm/internal/materialize"
 	"github.com/lenovobenben/clipterm/internal/paste"
+	"github.com/lenovobenben/clipterm/internal/pathstyle"
 )
 
 type PasteOptions struct {
 	CopyPath  bool
 	SendPaste bool
+	PathStyle string
+}
+
+type SmartPasteOptions struct {
+	PathStyle string
 }
 
 type SmartPasteResult struct {
@@ -69,11 +75,12 @@ func (s *Service) Paste(ctx context.Context, options PasteOptions) (string, erro
 		if path == "" {
 			return "", clipboard.ErrNoFile
 		}
-		if err := s.outputPath(ctx, path, options); err != nil {
+		outputPath, err := s.outputPath(ctx, path, options)
+		if err != nil {
 			return "", err
 		}
 
-		return path, nil
+		return outputPath, nil
 	}
 
 	if !errors.Is(err, clipboard.ErrNoFile) {
@@ -90,17 +97,19 @@ func (s *Service) Paste(ctx context.Context, options PasteOptions) (string, erro
 		return "", err
 	}
 
-	if err := s.outputPath(ctx, path, options); err != nil {
+	outputPath, err := s.outputPath(ctx, path, options)
+	if err != nil {
 		return "", err
 	}
 
-	return path, nil
+	return outputPath, nil
 }
 
-func (s *Service) SmartPaste(ctx context.Context) (SmartPasteResult, error) {
+func (s *Service) SmartPaste(ctx context.Context, options SmartPasteOptions) (SmartPasteResult, error) {
 	path, err := s.Paste(ctx, PasteOptions{
 		CopyPath:  true,
 		SendPaste: true,
+		PathStyle: options.PathStyle,
 	})
 	if err == nil {
 		return SmartPasteResult{Path: path}, nil
@@ -116,23 +125,28 @@ func (s *Service) SmartPaste(ctx context.Context) (SmartPasteResult, error) {
 	return SmartPasteResult{NativePaste: true}, nil
 }
 
-func (s *Service) outputPath(ctx context.Context, path string, options PasteOptions) error {
+func (s *Service) outputPath(ctx context.Context, path string, options PasteOptions) (string, error) {
+	outputPath, err := pathstyle.Transform(path, options.PathStyle)
+	if err != nil {
+		return "", err
+	}
+
 	if options.CopyPath || options.SendPaste {
-		if err := s.clipboard.WriteText(ctx, path); err != nil {
-			return err
+		if err := s.clipboard.WriteText(ctx, outputPath); err != nil {
+			return "", err
 		}
 	}
 
 	if options.SendPaste {
 		if err := waitForClipboard(ctx); err != nil {
-			return err
+			return "", err
 		}
 		if err := s.paste.SendPaste(ctx); err != nil {
-			return err
+			return "", err
 		}
 	}
 
-	return nil
+	return outputPath, nil
 }
 
 func (s *Service) Doctor(ctx context.Context) DoctorReport {

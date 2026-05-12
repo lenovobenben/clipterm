@@ -12,3 +12,15 @@ type Sender interface {
 	RequestPastePermission(ctx context.Context) bool
 	SendPaste(ctx context.Context) error
 }
+
+var debugLogger func(format string, args ...any)
+
+func SetDebugLogger(logger func(format string, args ...any)) {
+	debugLogger = logger
+}
+
+func debugf(format string, args ...any) {
+	if debugLogger != nil {
+		debugLogger(format, args...)
+	}
+}
