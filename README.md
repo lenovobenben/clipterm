@@ -6,6 +6,49 @@ clipterm solves a small but common workflow problem: screenshots and clipboard i
 
 The same smart paste shortcut also handles a single copied file by pasting its absolute path. Plain text still uses native paste.
 
+## Quick Start
+
+Download the archive for your platform from the release assets, then put the `clipterm` binary somewhere on your `PATH`.
+
+### macOS
+
+```bash
+clipterm doctor --request-permissions
+clipterm daemon
+```
+
+Then copy a screenshot, clipboard image, or one file in Finder, focus a terminal or text input, and press:
+
+```text
+Cmd+Shift+V
+```
+
+### Windows
+
+Run the native Windows `.exe` from PowerShell, Windows Terminal, or another Windows shell:
+
+```powershell
+clipterm.exe daemon --path-style windows
+```
+
+If your target workflow is inside WSL, start the daemon with WSL-style path output:
+
+```powershell
+clipterm.exe daemon --path-style wsl
+```
+
+Then copy a screenshot, clipboard image, or one file in Explorer, focus a terminal or text input, and press:
+
+```text
+Ctrl+Shift+V
+```
+
+For debugging, run the daemon in the foreground:
+
+```bash
+clipterm daemon --foreground --debug-hotkeys
+```
+
 ## Current Status
 
 The current prototype provides a dedicated smart paste shortcut:
