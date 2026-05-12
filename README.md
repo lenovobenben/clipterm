@@ -6,6 +6,49 @@ clipterm solves a small but common workflow problem: screenshots and clipboard i
 
 The same smart paste shortcut also handles a single copied file by pasting its absolute path. Plain text still uses native paste.
 
+## Quick Start
+
+Download the archive for your platform from the release assets, then put the `clipterm` binary somewhere on your `PATH`.
+
+### macOS
+
+```bash
+clipterm doctor --request-permissions
+clipterm daemon
+```
+
+Then copy a screenshot, clipboard image, or one file in Finder, focus a terminal or text input, and press:
+
+```text
+Cmd+Shift+V
+```
+
+### Windows
+
+Run the native Windows `.exe` from PowerShell, Windows Terminal, or another Windows shell:
+
+```powershell
+clipterm.exe daemon --path-style windows
+```
+
+If your target workflow is inside WSL, start the daemon with WSL-style path output:
+
+```powershell
+clipterm.exe daemon --path-style wsl
+```
+
+Then copy a screenshot, clipboard image, or one file in Explorer, focus a terminal or text input, and press:
+
+```text
+Ctrl+Shift+V
+```
+
+For debugging, run the daemon in the foreground:
+
+```bash
+clipterm daemon --foreground --debug-hotkeys
+```
+
 ## Current Status
 
 The current prototype provides a dedicated smart paste shortcut:
@@ -24,7 +67,7 @@ Smart paste behavior:
 | Screenshot or image stream | Save a PNG under the clipterm cache directory, then paste the generated path. |
 | Multiple copied files | Not supported yet; clipterm refuses it and does not modify the clipboard. |
 
-After a successful file or image path paste, the system clipboard contains that path text. Pressing normal paste again repeats the same path until the user copies something else.
+After a successful file or image path paste, the system clipboard intentionally contains that path text. Pressing normal paste again repeats the same path until the user copies something else.
 
 ## Windows Notes
 
@@ -150,7 +193,6 @@ These are not commitments for the current prototype:
 
 - Harden Windows image format coverage beyond common DIB/DIBV5 screenshots.
 - Improve installation/startup guidance for Windows.
-- Explore optional clipboard restoration after path paste.
 - Keep normal `Cmd+V` / `Ctrl+V` interception as a future research direction, not a current goal.
 
 ## License

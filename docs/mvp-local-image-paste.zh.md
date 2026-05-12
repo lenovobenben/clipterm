@@ -39,7 +39,7 @@ clipboard image/file -> local file path -> paste into current input
 | 截图或图片流 | 保存为 clipterm 缓存目录下的 PNG，再粘贴生成路径。 |
 | 多个复制文件 | 暂不支持，返回错误，不污染剪贴板。 |
 
-一次成功的图片或文件路径粘贴后，系统剪贴板会变成路径文本。因此用户可以继续按普通 `Cmd+V` / `Ctrl+V` 多次粘贴同一个路径，直到下一次复制其他内容。文本 fallback 不会修改剪贴板。
+一次成功的图片或文件路径粘贴后，系统剪贴板会有意变成路径文本。因此用户可以继续按普通 `Cmd+V` / `Ctrl+V` 多次粘贴同一个路径，直到下一次复制其他内容。文本 fallback 不会修改剪贴板。
 
 ## 非目标
 
@@ -48,7 +48,6 @@ clipboard image/file -> local file path -> paste into current input
 - 普通 `Cmd+V` / `Ctrl+V` 接管。
 - 应用级“原生图片粘贴”放行规则。
 - 多文件、目录、大文件传输。
-- 剪贴板恢复。
 - Linux 桌面支持。
 
 这些方向统一放入“后续路线（不保证实现）”。它们不能改变当前智能粘贴的稳定语义。
@@ -225,7 +224,6 @@ Windows：
 - 扩展 Windows 图片格式覆盖，例如调色板 DIB、压缩 DIB 或直接 PNG 剪贴板格式。
 - 提供更正式的 Windows 启动方式，例如 Startup folder、Task Scheduler 或安装器。
 - 支持可配置智能粘贴快捷键。
-- 实现可选剪贴板恢复，避免路径粘贴后覆盖原始图片/文件对象。
 - 研究路径 shell escaping，但当前先粘贴原始绝对路径。
 - 研究普通 `Cmd+V` / `Ctrl+V` 接管，但这会影响用户原生粘贴，当前不做。
 

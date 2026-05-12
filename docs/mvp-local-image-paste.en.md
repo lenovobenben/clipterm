@@ -39,7 +39,7 @@ This MVP only turns local clipboard objects into locally accessible paths.
 | Screenshot or image stream | Save a PNG under the clipterm cache directory, then paste the generated path. |
 | Multiple copied files | Not supported yet; return an error and do not modify the clipboard. |
 
-After a successful file or image path paste, the system clipboard contains that path text. Users can press normal `Cmd+V` / `Ctrl+V` repeatedly to paste the same path until they copy something else. Text fallback does not modify the clipboard.
+After a successful file or image path paste, the system clipboard intentionally contains that path text. Users can press normal `Cmd+V` / `Ctrl+V` repeatedly to paste the same path until they copy something else. Text fallback does not modify the clipboard.
 
 ## Non-Goals
 
@@ -48,7 +48,6 @@ The current MVP does not include:
 - Normal `Cmd+V` / `Ctrl+V` interception.
 - App-specific native image paste allow rules.
 - Multi-file, directory, or large-file transfer.
-- Clipboard restoration.
 - Linux desktop support.
 
 These directions belong under "Later Directions (Not Guaranteed)." They should not change the stable semantics of the current smart paste shortcut.
@@ -225,7 +224,6 @@ The following items are possibilities, not commitments for the current MVP:
 - Extend Windows image format coverage, such as palette DIB, compressed DIB, or direct PNG clipboard formats.
 - Provide a more formal Windows startup path, such as Startup folder, Task Scheduler, or an installer.
 - Support a configurable smart paste shortcut.
-- Implement optional clipboard restoration so path paste does not leave the generated path in the clipboard.
 - Study path shell escaping; the current behavior pastes raw absolute paths.
 - Study normal `Cmd+V` / `Ctrl+V` interception, but this affects native paste behavior and is not part of the current scope.
 
