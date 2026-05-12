@@ -1,0 +1,97 @@
+name: Build release assets
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version without leading v
+        required: true
+        default: "1.0"
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Package ${{ matrix.asset_name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-13
+            goos: darwin
+            goarch: amd64
+            binary: clipterm
+            package_dir: clipterm_${{ inputs.version }}_darwin_amd64
+            asset_name: clipterm_${{ inputs.version }}_darwin_amd64.tar.gz
+            archive: tar
+            cgo_enabled: "1"
+          - runner: macos-14
+            goos: darwin
+            goarch: arm64
+            binary: clipterm
+            package_dir: clipterm_${{ inputs.version }}_darwin_arm64
+            asset_name: clipterm_${{ inputs.version }}_darwin_arm64.tar.gz
+            archive: tar
+            cgo_enabled: "1"
+          - runner: windows-latest
+            goos: windows
+            goarch: amd64
+            binary: clipterm.exe
+            package_dir: clipterm_${{ inputs.version }}_windows_amd64
+            asset_name: clipterm_${{ inputs.version }}_windows_amd64.zip
+            archive: zip
+            cgo_enabled: "0"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Test
+        shell: bash
+        run: go test ./...
+
+      - name: Build binary
+        shell: bash
+        env:
+          CGO_ENABLED: ${{ matrix.cgo_enabled }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p "dist/${{ matrix.package_dir }}"
+          go build \
+            -ldflags "-X github.com/lenovobenben/clipterm/internal/version.Version=${VERSION}" \
+            -o "dist/${{ matrix.package_dir }}/${{ matrix.binary }}" \
+            ./cmd/clipterm
+          cp README.md LICENSE "dist/${{ matrix.package_dir }}/"
+
+      - name: Create tar.gz asset
+        if: matrix.archive == 'tar'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -C dist -czf "dist/${{ matrix.asset_name }}" "${{ matrix.package_dir }}"
+
+      - name: Create zip asset
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          Compress-Archive `
+            -Path "dist/${{ matrix.package_dir }}" `
+            -DestinationPath "dist/${{ matrix.asset_name }}"
+
+      - name: Upload asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: dist/${{ matrix.asset_name }}
+          if-no-files-found: error
